@@ -1,0 +1,12 @@
+# 必需
+fastapi>=0.110
+uvicorn>=0.29
+
+# 非 Windows 平台的注入后端（Windows 上不需要）
+pynput>=1.7 ; sys_platform != "win32"
+
+# 可选：安装后启动时会在终端打印二维码，手机扫一下就打开
+# qrcode>=7.4
+
+# 可选：非 Windows 平台用于探测多显示器尺寸
+# screeninfo>=0.8

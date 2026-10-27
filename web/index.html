@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#111318">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/style.css">
+<title>reMouse 触摸板</title>
+</head>
+<body>
+
+<header class="bar" id="statusbar">
+  <span class="dot" id="dot"></span>
+  <span class="host" id="hostname">连接中…</span>
+  <span class="spacer"></span>
+  <span class="rtt" id="rtt">—</span>
+  <button class="icon-btn" id="btn-settings" aria-label="设置">⚙</button>
+</header>
+
+<main id="pad" class="pad">
+  <div class="hint" id="hint">
+    <div class="hint-title">触摸板</div>
+    <div class="hint-lines">
+      <p>单指滑动移动光标</p>
+      <p>轻点 = 左键　双指点 = 右键</p>
+      <p>双指滑动 = 滚动　长按拖动</p>
+    </div>
+  </div>
+  <div class="ripple" id="ripple"></div>
+
+  <!-- 右侧滚动条：拖动模拟滚轮。松手回弹，可无限拖 -->
+  <div class="scrollbar" id="scrollbar" aria-label="滚动条">
+    <div class="scrollbar-track">
+      <div class="scrollbar-thumb" id="scrollbar-thumb"></div>
+    </div>
+  </div>
+  <div class="scroll-hint" id="scroll-hint" hidden>↑ 1</div>
+</main>
+
+<footer class="toolbar">
+  <button class="key" data-btn="l" aria-label="左键">左键</button>
+  <button class="key" data-btn="m" aria-label="中键">中键</button>
+  <button class="key" data-btn="r" aria-label="右键">右键</button>
+  <span class="spacer"></span>
+  <button class="tab" data-panel="keyboard" aria-label="键盘">⌨</button>
+  <button class="tab" data-panel="media" aria-label="媒体">♪</button>
+  <button class="tab" data-panel="keys" aria-label="快捷键">⌘</button>
+  <button class="tab" data-panel="gyro" aria-label="体感">◉</button>
+</footer>
+
+<!-- 键盘面板 -->
+<section class="panel" id="panel-keyboard" hidden>
+  <div class="panel-head">
+    <strong>键盘输入</strong>
+    <span class="tip">整句发送，中文可用</span>
+    <button class="close" data-close>✕</button>
+  </div>
+  <div class="compose">
+    <textarea id="compose-input" rows="2" placeholder="在这里打字，然后点发送" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+    <button class="send" id="btn-send">发送</button>
+  </div>
+  <div class="grid" id="grid-special"></div>
+  <div class="row">
+    <button class="key wide" data-key="backspace">⌫</button>
+    <button class="key wide" data-key="enter">Enter</button>
+    <button class="key wide" data-key="esc">Esc</button>
+    <button class="key wide" data-key="tab">Tab</button>
+  </div>
+</section>
+
+<!-- 媒体面板 -->
+<section class="panel" id="panel-media" hidden>
+  <div class="panel-head">
+    <strong>媒体控制</strong>
+    <button class="close" data-close>✕</button>
+  </div>
+  <div class="media">
+    <button class="key big" data-media="pv">⏮</button>
+    <button class="key big" data-media="pp">⏯</button>
+    <button class="key big" data-media="ng">⏭</button>
+  </div>
+  <div class="media">
+    <button class="key" data-media="vd">音量 −</button>
+    <button class="key" data-media="mu">静音</button>
+    <button class="key" data-media="vu">音量 +</button>
+  </div>
+</section>
+
+<!-- 快捷键面板 -->
+<section class="panel" id="panel-keys" hidden>
+  <div class="panel-head">
+    <strong>快捷键</strong>
+    <span class="tip">先点修饰键可锁定</span>
+    <button class="close" data-close>✕</button>
+  </div>
+  <div class="mods" id="mods">
+    <button class="key mod" data-mod="ctrl">Ctrl</button>
+    <button class="key mod" data-mod="shift">Shift</button>
+    <button class="key mod" data-mod="alt">Alt</button>
+    <button class="key mod" data-mod="win">Win</button>
+  </div>
+  <div class="grid" id="grid-combo"></div>
+</section>
+
+<!-- 体感面板 -->
+<section class="panel" id="panel-gyro" hidden>
+  <div class="panel-head">
+    <strong>体感控制</strong>
+    <span class="tip">转动手机移动光标</span>
+    <button class="close" data-close>✕</button>
+  </div>
+
+  <!-- 诊断区：先确认能不能拿到数据，再谈手感 -->
+  <div class="diag" id="gyro-diag">
+    <div class="diag-row">
+      <span>传感器</span><em id="gyro-support">检测中…</em>
+    </div>
+    <div class="diag-row">
+      <span>安全上下文</span><em id="gyro-secure">—</em>
+    </div>
+    <div class="diag-row">
+      <span>数据源</span><em id="gyro-source">—</em>
+    </div>
+    <div class="diag-row live">
+      <span>实时角速度</span><em id="gyro-live">—</em>
+    </div>
+  </div>
+
+  <div class="hint-box" id="gyro-hint" hidden></div>
+
+  <div class="row" style="margin-bottom:10px">
+    <button class="key wide" id="btn-gyro-perm">授权传感器</button>
+    <button class="key wide" id="btn-gyro-toggle">开启体感</button>
+  </div>
+
+  <label class="field switch">
+    <span>按住才移动（松手即停）</span>
+    <input type="checkbox" id="gyro-hold" checked>
+  </label>
+
+  <label class="field switch">
+    <span>左右反转</span>
+    <input type="checkbox" id="gyro-invx" checked>
+  </label>
+
+  <label class="field switch">
+    <span>上下反转</span>
+    <input type="checkbox" id="gyro-invy" checked>
+  </label>
+
+  <label class="field" style="margin-top:4px">
+    <span>水平速度 <em id="gyro-speed-val">1600</em> px/s</span>
+    <input type="range" id="gyro-speed" min="400" max="4000" step="100" value="1600">
+  </label>
+
+  <label class="field">
+    <span>垂直速度 <em id="gyro-speed-y-val">2600</em> px/s</span>
+    <input type="range" id="gyro-speed-y" min="400" max="5000" step="100" value="2600">
+  </label>
+
+  <label class="field">
+    <span>死区 <em id="gyro-dz-val">4.0</em> °/s</span>
+    <input type="range" id="gyro-dz" min="0" max="15" step="0.5" value="4">
+  </label>
+</section>
+
+<!-- 设置面板 -->
+<section class="panel" id="panel-settings" hidden>
+  <div class="panel-head">
+    <strong>设置</strong>
+    <button class="close" data-close>✕</button>
+  </div>
+
+  <label class="field">
+    <span>灵敏度 <em id="sens-val">3.2</em></span>
+    <input type="range" id="sens" min="0.4" max="6" step="0.1" value="3.2">
+  </label>
+
+  <label class="field switch">
+    <span>指针加速</span>
+    <input type="checkbox" id="acc" checked>
+  </label>
+
+  <label class="field switch">
+    <span>自然滚动</span>
+    <input type="checkbox" id="nat">
+  </label>
+
+  <label class="field switch">
+    <span>三指手势（Win+Tab / 切换窗口）</span>
+    <input type="checkbox" id="three">
+  </label>
+
+  <label class="field switch">
+    <span>触觉反馈</span>
+    <input type="checkbox" id="haptic" checked>
+  </label>
+
+  <label class="field switch">
+    <span>显示右侧滚动条</span>
+    <input type="checkbox" id="showscroll" checked>
+  </label>
+
+  <label class="field switch">
+    <span>滚动条在左侧（左手持机）</span>
+    <input type="checkbox" id="scrollleft">
+  </label>
+
+  <div class="field readonly">
+    <span>后端</span><em id="backend">—</em>
+  </div>
+  <div class="field readonly">
+    <span>令牌</span><em id="token-shown">—</em>
+  </div>
+
+  <button class="key wide danger" id="btn-forget">清除本机保存的连接令牌</button>
+</section>
+
+<script src="/static/gesture.js"></script>
+<script src="/static/gyro.js"></script>
+<script src="/static/scrollbar.js"></script>
+<script src="/static/hint.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

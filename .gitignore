@@ -1,0 +1,51 @@
+# ---- 绝对不能提交的东西 ----
+
+# 运行期状态：连接令牌 + 本地 CA 和服务器证书的私钥。
+# 泄露 .state 等于把别人的鼠标控制权和一张可签发证书的根密钥一起交出去。
+.state/
+
+# 如果真的需要保留目录结构，用下面这行代替上面那行：
+# !.state/.gitkeep
+
+# ---- Python ----
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# ---- 编辑器与系统 ----
+
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 项目自身产生的临时文件 ----
+
+# --record 写入的原始消息流，可能含输入内容
+*.jsonl
+
+# 证书与自检的临时输出
+*.log
