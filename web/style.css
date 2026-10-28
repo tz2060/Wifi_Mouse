@@ -562,7 +562,11 @@ body {
   border-color: var(--accent);
 }
 
-/* 拇指用绝对定位 + transform 移动，避免每帧改 top 触发重排 */
+/* 拇指用绝对定位 + transform 移动，避免每帧改 top 触发重排。
+
+   不动时完全隐藏：静止的滑条只是一条很淡的轨道，
+   拇指停在中间反而让人以为"这里有个可以点的东西"。
+   一旦按下拖动就立刻浮现，给拖拽一个明确的着力点。 */
 .scrollbar-thumb {
   position: absolute;
   left: 50%;
@@ -571,15 +575,53 @@ body {
   height: 44px;
   margin: -22px 0 0 -13px;
   border-radius: 13px;
-  background: var(--fg-dim);
-  opacity: 0.55;
-  will-change: transform;
+  background: var(--accent);
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 0.18s;
+  will-change: transform, opacity;
   pointer-events: none;
 }
 
+/* 拖动中才显示拇指。用 .active 而不是 :active ——
+   手指按住后可能滑出轨道，:active 会闪，.active 由 JS 控制更稳。
+
+   同时给一圈淡光晕，表示"正在发力"。 */
 .scrollbar.active .scrollbar-thumb {
-  background: var(--accent);
   opacity: 1;
+  box-shadow: 0 0 0 3px rgba(76, 141, 255, 0.22);
+}
+
+/* 倍率接近上限时，光晕扩大一圈，给"滚得更快"一个视觉反馈。
+   不用 transform: scale，因为位移已经占了 transform。 */
+.scrollbar.fast .scrollbar-thumb {
+  box-shadow: 0 0 0 7px rgba(76, 141, 255, 0.32);
+}
+
+/* 巡航中：手指按住不动，但内容还在持续滚动。
+   给滑块一个缓慢的呼吸动画，明确传达"它还在动，松开才会停"。
+   没有这个提示的话，手停住而页面还在滚会让人以为卡住了。 */
+.scrollbar.cruising .scrollbar-thumb {
+  animation: cruise-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes cruise-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(76, 141, 255, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(76, 141, 255, 0.12);
+  }
+}
+
+/* 巡航时轨道也加一点流动感，方向朝下 */
+.scrollbar.cruising .scrollbar-track {
+  background: linear-gradient(
+    180deg,
+    rgba(76, 141, 255, 0.05) 0%,
+    rgba(76, 141, 255, 0.22) 50%,
+    rgba(76, 141, 255, 0.05) 100%
+  );
 }
 
 /* 正在滚动时短暂提示方向 */

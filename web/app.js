@@ -445,7 +445,7 @@
 
   function frame(now) {
     engine.tick(now);
-    tickScrollbar();
+    tickScrollbar(now);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -465,13 +465,15 @@
     const dy = window.Scrollbar.toWheelDelta(payload.dy);
     if (!dy) return;
     send({ t: 'wh', dy: dy, dx: 0 });
-    showScrollHint(payload.dy);
-    buzz(6);
+    showScrollHint(payload.dy, payload.factor);
+    buzz(payload.factor && payload.factor > 2.5 ? 10 : 6);
   };
 
-  function showScrollHint(dir) {
+  function showScrollHint(dir, factor) {
     if (!scrollHintEl) return;
-    scrollHintEl.textContent = (dir > 0 ? '↑ ' : '↓ ') + Math.abs(dir);
+    const arrow = dir > 0 ? '↑ ' : '↓ ';
+    const speed = factor ? '  ×' + factor.toFixed(1) : '';
+    scrollHintEl.textContent = arrow + Math.abs(dir) + speed;
     scrollHintEl.hidden = false;
     // 先强制重排再加 class，否则连续的两次提示不会有过渡动画
     void scrollHintEl.offsetWidth;
@@ -484,11 +486,32 @@
   }
 
   /* 每帧只更新拇指位置，不碰其它属性 —— 拖动时这会是
-     每秒 60 次以上的调用，任何多余读写都会让手感变黏。 */
-  function tickScrollbar() {
-    const out = scroll.tick();
-    if (!out || !scrollThumb) return;
-    scrollThumb.style.transform = 'translateY(' + out.offset.toFixed(1) + 'px)';
+     每秒 60 次以上的调用，任何多余读写都会让手感变黏。
+
+     倍率超过 2.5 时给滚动条挂上 .fast，光晕扩大一圈。
+     巡航时挂 .cruising，让滑块有个"持续滚动中"的呼吸动画。 */
+  let scrollFast = false;
+  let scrollCruising = false;
+
+  function tickScrollbar(now) {
+    const out = scroll.tick(now);
+    if (out && scrollThumb) {
+      scrollThumb.style.transform = 'translateY(' + out.offset.toFixed(1) + 'px)';
+    }
+
+    const fast = scroll.dragging && scroll.factor > 2.5;
+    if (fast !== scrollFast) {
+      scrollFast = fast;
+      scrollbarEl.classList.toggle('fast', fast);
+    }
+
+    const cruising = !!scroll.cruising;
+    if (cruising !== scrollCruising) {
+      scrollCruising = cruising;
+      scrollbarEl.classList.toggle('cruising', cruising);
+      // 巡航开始时给一次触觉确认，让人知道"松手前它会一直滚"
+      if (cruising) buzz(14);
+    }
   }
 
   (function bindScrollbar() {
@@ -501,7 +524,7 @@
       // 那里仍然属于触摸板，可以正常移动光标。
       scrollbarEl.classList.add('active');
       track.setPointerCapture && track.setPointerCapture(e.pointerId);
-      scroll.pointerDown(e.clientY);
+      scroll.pointerDown(e.clientY, performance.now());
       hideHint();
       buzz(8);
       e.preventDefault();
@@ -510,7 +533,7 @@
 
     track.addEventListener('pointermove', function (e) {
       if (!scroll.dragging) return;
-      scroll.pointerMove(e.clientY);
+      scroll.pointerMove(e.clientY, performance.now());
       e.preventDefault();
       e.stopPropagation();
     }, { passive: false });
@@ -519,6 +542,11 @@
       if (!scroll.dragging) return;
       scroll.pointerUp();
       scrollbarEl.classList.remove('active');
+      // 松手时一并清掉快速档与巡航态，否则光晕会残留到下次拖动
+      scrollbarEl.classList.remove('fast');
+      scrollbarEl.classList.remove('cruising');
+      scrollFast = false;
+      scrollCruising = false;
       if (e) {
         e.preventDefault();
         e.stopPropagation();
