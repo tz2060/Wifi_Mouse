@@ -10,8 +10,26 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-MAX_MESSAGE_BYTES = 64 * 1024
-MAX_TEXT_CHARS = 4096
+# 单条消息的字节上限。
+#
+# 这个值必须能容纳"文本上限"的最坏情况，否则会出现
+# "字符数没超、字节数超了"的诡异拒绝：
+#   8192 个 emoji 的 JSON ≈ 82000 字节（每个 4 字节 UTF-8 + 转义开销）
+# 所以取 256KB 留足余量。移动/滚轮这类高频消息远小于此，不受影响。
+MAX_MESSAGE_BYTES = 256 * 1024
+# 文本上限按"注入代价"定，而不是随便挑个数。
+#
+# 一个 emoji 在 Python 里 len() 是 1，但注入时要发 2 个 UTF-16 码元，
+# 也就是 4 个键盘事件；中文是 3 字节 UTF-8 / 1 码元。
+# 如果只看字符数，8192 个 emoji 和 8192 个汉字被一视同仁，
+# 但前者的事件量是后者的两倍。所以真正需要限制的是码元数。
+#
+# 两个数字的关系：
+#   MAX_TEXT_CHARS 是"字符"上限，管住普通文本的长度；
+#   MAX_TEXT_UNITS 是"码元"上限，管住表情把注入量放大的情况。
+#   后者必须比前者大，否则字符检查永远先触发，码元检查成了死代码。
+MAX_TEXT_CHARS = 8192
+MAX_TEXT_UNITS = 8192
 MAX_MOVE_PX = 4000
 MAX_SCROLL_LINES = 40
 
@@ -152,8 +170,23 @@ def to_command(msg: Message) -> Command | None:
             raise ProtocolError("s 必须是字符串")
         if not text:
             return None
+
+        # 两道限制缺一不可：
+        #   字符数 —— 防止超长普通文本
+        #   码元数 —— 防止大量 emoji。一个 emoji 只算 1 个字符，
+        #             但注入时要发 2 个码元 / 4 个事件。
+        #             只查字符数的话，8192 个 emoji 能通过检查，
+        #             却在注入时产生 16384 个事件，超出系统承受范围。
         if len(text) > MAX_TEXT_CHARS:
             raise ProtocolError(f"文本超过 {MAX_TEXT_CHARS} 字符")
+
+        units = len(text.encode("utf-16-le")) // 2
+        if units > MAX_TEXT_UNITS:
+            raise ProtocolError(
+                f"文本注入量超过上限（{units} 码元 > {MAX_TEXT_UNITS}）；"
+                "表情符号占用较多，适当删减后重试"
+            )
+
         return Command("text", text=text)
 
     if t == T_MEDIA:

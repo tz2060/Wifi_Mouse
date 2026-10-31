@@ -71,7 +71,50 @@ test('发送成功后清空输入框', function () {
 });
 
 test('空白内容不发送', function () {
-  assert.ok(appJs.includes('text.trim()'), '应检查 trim，避免只发空格');
+  // 空内容判定在 checkText 里，typeSubmit 调用它做前置校验
+  assert.ok(appJs.includes('function checkText'), '应有 checkText 前置校验');
+  const idx = appJs.indexOf('function checkText');
+  const body = appJs.slice(idx, idx + 600);
+  assert.ok(body.includes('text.trim()') || body.includes('s.trim()'),
+    '应检查 trim，避免只发空格');
+});
+
+test('超限时保留输入内容，不清空', function () {
+  // 用户辛苦打的一段话，不能因为超限就丢掉
+  const idx = appJs.indexOf('function typeSubmit');
+  assert.ok(idx > 0);
+  const body = appJs.slice(idx, idx + 700);
+  assert.ok(body.includes('return'), '超限应提前返回');
+  // 清空只能发生在发送成功分支
+  const clearIdx = body.indexOf("input.value = ''");
+  const problemIdx = body.indexOf('if (problem)');
+  assert.ok(problemIdx >= 0 && problemIdx < clearIdx,
+    '必须先判超限，再走清空逻辑');
+});
+
+test('前端文本上限与服务端一致', function () {
+  const py = fs.readFileSync(
+    path.join(__dirname, '..', 'remouse', 'protocol.py'), 'utf8');
+  const chars = /MAX_TEXT_CHARS = (\d+)/.exec(py);
+  const units = /MAX_TEXT_UNITS = (\d+)/.exec(py);
+  assert.ok(chars && units, '服务端应定义两个上限');
+
+  const jsChars = /MAX_TEXT_CHARS = (\d+)/.exec(appJs);
+  const jsUnits = /MAX_TEXT_UNITS = (\d+)/.exec(appJs);
+  assert.ok(jsChars, '前端应定义 MAX_TEXT_CHARS');
+  assert.ok(jsUnits, '前端应定义 MAX_TEXT_UNITS');
+
+  assert.strictEqual(jsChars[1], chars[1], 'MAX_TEXT_CHARS 必须与服务端一致');
+  assert.strictEqual(jsUnits[1], units[1], 'MAX_TEXT_UNITS 必须与服务端一致');
+});
+
+test('服务端错误会显示给用户', function () {
+  // 之前 'er' 分支直接 return，超限消息被静默丢弃，
+  // 用户看到"已发送"但电脑上什么都没有。
+  const idx = appJs.indexOf("msg.t === 'er'");
+  assert.ok(idx > 0);
+  const body = appJs.slice(idx, idx + 500);
+  assert.ok(body.includes('showTypeHint'), '错误应显示到打字面板');
 });
 
 /* ---------- 折叠分组 ---------- */

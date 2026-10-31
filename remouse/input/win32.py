@@ -142,6 +142,11 @@ class Win32Backend:
         self._pressed_mods: set[str] = set()
         self._type_text_supported = True
 
+        # 单次 SendInput 的事件上限。取 256 是个保守值：
+        # 键盘事件结构 40 字节，256 个约 10KB，远低于内核缓冲；
+        # 而系统对单次调用的事件数限流，上千个就可能只接受一部分。
+        self.chunk_size = 256
+
         # 自己维护的光标位置。相对移动改为"读当前位置 + 增量 → 绝对定位"。
         # 原因：Windows 的指针加速曲线作用于相对移动，
         # 实测同样发 +420px，系统实际走了 +602px（1.43 倍），
@@ -162,6 +167,28 @@ class Win32Backend:
             err = ctypes.get_last_error()
             # 0 通常意味着被 UIPI 拦下（目标窗口权限更高）
             raise OSError(err, f"SendInput 只送入 {sent}/{count} 个事件（Windows 错误 {err}）")
+
+    def _send_chunked(self, inputs: list[INPUT]) -> None:
+        """分批送入事件，避免大批量被系统限流后“只进一半”。
+
+        SendInput 一次送入过多事件时，系统可能只接受前面一部分。
+        返回值小于请求数就说明发生了这种情况——而此时前半段
+        已经真实落进目标窗口了，无法回滚。
+        表现就是“电脑只收到前半段，后半段没了”。
+
+        分批之后每批都是独立成败，某批失败也只损失那一小段；
+        同时批与批之间让出一次执行权，给系统消化时间。
+        代价是超大文本会有一点渐进感，但那反而更像真人打字。
+        """
+        if not inputs:
+            return
+        chunk = max(1, int(self.chunk_size))
+        for i in range(0, len(inputs), chunk):
+            batch = inputs[i : i + chunk]
+            self._send(*batch)
+            # 让出一次时间片。不睡死，只是不独占消息泵。
+            if i + chunk < len(inputs):
+                time.sleep(0)
 
     @staticmethod
     def _mouse_input(flags: int, dx: int = 0, dy: int = 0, data: int = 0) -> INPUT:
@@ -328,25 +355,21 @@ class Win32Backend:
         绝大多数编辑器会直接忽略（它是一个不可见的控制字符），
         看起来就是"多行内容粘成一行"。
         所以遇到换行时改发真正的回车键（VK_RETURN）。
+
+        整段攒完再统一分批送，而不是一个字符一次 _send：
+        后者在几千字时会调上千次 SendInput，慢且更容易被限流。
+        攒起来交给 _send_chunked 按固定大小切块，兼顾顺序与稳定。
         """
         VK_RETURN = 0x0D
         events: list[INPUT] = []
-
-        def flush() -> None:
-            if events:
-                self._send(*events)
-                events.clear()
 
         for ch in text:
             if ch == "\r":
                 continue                      # CRLF 只按一次，避免双回车
             if ch == "\n":
-                # 先把前面攒的字符打出去，保证顺序
-                flush()
-                self._send(
-                    self._key_input(VK_RETURN, 0, 0),
-                    self._key_input(VK_RETURN, 0, KEYEVENTF_KEYUP),
-                )
+                # 回车插在累积队列里，保持与前后字符的相对顺序
+                events.append(self._key_input(VK_RETURN, 0, 0))
+                events.append(self._key_input(VK_RETURN, 0, KEYEVENTF_KEYUP))
                 continue
 
             units = ch.encode("utf-16-le")
@@ -357,7 +380,7 @@ class Win32Backend:
                     self._key_input(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP)
                 )
 
-        flush()
+        self._send_chunked(events)
 
     def media(self, action: str) -> None:
         try:

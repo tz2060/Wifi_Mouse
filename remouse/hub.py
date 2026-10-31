@@ -31,6 +31,24 @@ MAX_QUEUE = 512
 MERGE_LIMIT = 2000.0
 
 
+def _is_text_like(raw: str | bytes) -> bool:
+    """粗略判断这是不是一条文本消息。
+
+    只在 decode 失败后调用，用来决定要不要把错误回传给用户。
+    文本超限是用户自己造成的、可以自查的问题，值得告知；
+    而畸形 JSON / 非法字段属于协议层噪音，继续静默。
+
+    这里不追求精确——解析本来就已经失败了，只能做字节层面的粗判。
+    判错的代价很小：要么多回一条无害的错误提示，要么少提示一次。
+    """
+    try:
+        head = raw if isinstance(raw, str) else raw.decode("utf-8", "ignore")
+    except Exception:
+        return False
+    # 文本消息的特征：类型字段是 tx
+    return '"tx"' in head or '"t": "tx"' in head or "'tx'" in head
+
+
 @dataclass(frozen=True)
 class SessionInfo:
     peer: str
@@ -224,8 +242,14 @@ class Hub:
 
         try:
             message = protocol.decode(raw)
-        except protocol.ProtocolError:
-            return None  # 畸形消息静默丢弃，不回错误，避免被用来探测
+        except protocol.ProtocolError as exc:
+            # 不能一概静默丢弃："消息过大"这类问题如果吞掉，
+            # 用户看到的是"提示已发送、电脑上什么都没有"，
+            # 完全无法自查。文本类消息把原因回传，其余（畸形 JSON、
+            # 非法字段）仍然静默，避免被用来探测协议细节。
+            if _is_text_like(raw):
+                return protocol.encode_error(str(exc))
+            return None
 
         if message.type == protocol.T_PING:
             return protocol.encode_pong(message.raw.get("n"))

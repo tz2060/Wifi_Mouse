@@ -181,6 +181,14 @@
       if (msg.code === 4401) {
         setStatus('err', '令牌无效');
         showTokenHint();
+        return;
+      }
+      // 其余错误（文本超限、注入失败等）显示出来。
+      // 之前这里直接 return，用户完全看不到服务端说了什么，
+      // 只能看到"已发送"的假象。
+      const why = msg.m || msg.message || msg.msg || '发送失败';
+      if (typeof showTypeHint === 'function') {
+        showTypeHint(String(why), true);
       }
       return;
     }
@@ -1038,13 +1046,50 @@
    *    回车被占用后，想发多行只能靠"换行"按钮插入 \n。
    */
 
+  /* 与服务端 protocol.py 保持一致的上限。
+     前端先查一遍，是为了在"点发送之前"就给出准确原因，
+     而不是让消息发出去后被服务端丢掉、用户还以为是发成功了。
+
+     两个数字的关系：字符数管普通文本长度，码元数管表情放大注入量。
+     表情每个占 2 码元，所以 4096 个表情就会撞到码元上限。 */
+  const MAX_TEXT_CHARS = 8192;
+  const MAX_TEXT_UNITS = 8192;
+
+  /* JS 的 string.length 就是 UTF-16 码元数，正好等于服务端的
+     len(text.encode('utf-16-le')) // 2。emoji 在 JS 里 length 为 2，
+     与服务端一致，所以直接比较即可。 */
+  function textUnits(s) {
+    return s.length;
+  }
+
+  /** 返回 null 表示可以发送，否则返回给用户看的原因。 */
+  function checkText(s) {
+    if (!s.trim()) return '没有内容可发送';
+
+    const units = textUnits(s);
+    // 先判码元：表情让 length 翻倍，用户看到的"字数"其实没那么多。
+    // 先报"字符超限"会让人困惑——他数了数发现没到 8192。
+    if (units > MAX_TEXT_UNITS) {
+      return '内容过长（' + units + ' / ' + MAX_TEXT_UNITS
+        + '），表情等符号占位较多，请分段发送';
+    }
+    if (s.length > MAX_TEXT_CHARS) {
+      return '文本太长（' + s.length + ' / ' + MAX_TEXT_CHARS + ' 字符），请分段发送';
+    }
+    return null;
+  }
+
   function typeSubmit() {
     const input = $('type-input');
     const text = input.value;
-    if (!text.trim()) {
-      showTypeHint('没有内容可发送', true);
+
+    const problem = checkText(text);
+    if (problem) {
+      // 超限时保留输入框内容，不清空 —— 否则用户辛苦打的一段就没了
+      showTypeHint(problem, true);
       return;
     }
+
     if (send({ t: 'tx', s: text })) {
       input.value = '';
       showTypeHint('已发送 ' + text.length + ' 个字符', false);
