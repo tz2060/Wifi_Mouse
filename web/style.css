@@ -1,4 +1,4 @@
-/* reMouse —— 手机端样式
+﻿/* reMouse —— 手机端样式
    目标：占满屏幕、不误触、深色为主（长时间看眼睛不累） */
 
 :root {
@@ -28,6 +28,11 @@
 }
 
 * { box-sizing: border-box; }
+
+/* hidden 属性必须真的隐藏。
+   有 display:flex/grid 的元素会把 hidden 覆盖掉，
+   导致界面上出现本该隐藏的按钮。用 !important 兜住。 */
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -651,4 +656,246 @@ body {
 
 @media (prefers-color-scheme: light) {
   .scrollbar-track { background: rgba(0, 0, 0, 0.05); }
+}
+
+/* ---------- 传文件面板 ---------- */
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 22px 14px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+.drop:active, .drop.hover {
+  border-color: var(--accent);
+  background: rgba(76, 141, 255, 0.08);
+}
+.drop-icon { font-size: 24px; color: var(--accent); }
+.drop-text { font-size: 15px; }
+.drop-sub { font-size: 12px; color: var(--fg-dim); }
+
+.fp-queue {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fp-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: var(--bg-raise);
+}
+
+.fp-item-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.fp-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fp-item-size { color: var(--fg-dim); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.fp-item-status { font-size: 12px; flex: 0 0 auto; }
+.fp-item-status.ok { color: var(--ok); }
+.fp-item-status.err { color: var(--err); }
+.fp-item-status.doing { color: var(--accent); }
+
+.fp-progress {
+  margin-top: 7px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.fp-progress > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+.fp-item.done .fp-progress > i { background: var(--ok); }
+.fp-item.failed .fp-progress > i { background: var(--err); }
+
+.fp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fp-refresh {
+  margin-left: auto;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-raise);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.fp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 42vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fp-empty {
+  text-align: center;
+  color: var(--fg-dim);
+  font-size: 13px;
+  padding: 20px 0;
+}
+
+.fp-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raise);
+}
+
+.fp-file-main { flex: 1; min-width: 0; }
+.fp-file-name {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fp-file-meta {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fp-mini {
+  flex: 0 0 auto;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.fp-mini:active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.fp-mini.danger { color: var(--err); border-color: var(--err); }
+.fp-mini.danger:active { background: var(--err); color: #fff; }
+
+/* 面板里的 hint-box 复用主样式 */
+.panel .hint-box { margin-top: 10px; }
+
+/* ---------- 快捷键面板的分组折叠 ---------- */
+
+.fold {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: var(--bg-soft);
+  overflow: hidden;
+}
+
+.fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+  /* 去掉 iOS Safari 默认的三角，用自己的 */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.fold > summary::-webkit-details-marker { display: none; }
+
+/* 自绘展开指示三角 */
+.fold > summary::after {
+  content: '▾';
+  margin-left: auto;
+  color: var(--fg-dim);
+  font-size: 12px;
+  transition: transform 0.18s;
+}
+.fold:not([open]) > summary::after {
+  transform: rotate(-90deg);
+}
+
+.fold-note {
+  font-size: 12px;
+  color: var(--fg-dim);
+  font-weight: 400;
+}
+
+/* 内容区左右留白，和 summary 的边距对齐 */
+.fold > .grid,
+.fold > .row {
+  padding: 0 12px 12px;
+  margin: 0;
+}
+
+/* ---------- 打字面板 ---------- */
+
+#type-input {
+  width: 100%;
+  min-height: 120px;
+  max-height: 40vh;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raise);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 16px;      /* 16px 以下 iOS 会自动放大页面 */
+  line-height: 1.55;
+  resize: vertical;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#type-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#type-input::placeholder { color: var(--fg-dim); }
+
+/* 打字面板的动作按钮区 */
+#panel-type .row { margin-top: 10px; }
+
+#panel-type .key.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }

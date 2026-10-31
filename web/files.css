@@ -1,0 +1,267 @@
+/* 文件柜样式。复用触摸板的配色变量，保持同一套观感。 */
+
+:root {
+  --bg: #111318;
+  --bg-soft: #1a1d24;
+  --bg-raise: #23272f;
+  --line: #2e333d;
+  --fg: #e8eaee;
+  --fg-dim: #9aa1ad;
+  --accent: #4c8dff;
+  --ok: #35d07f;
+  --warn: #ffb020;
+  --err: #ff5c5c;
+  --radius: 14px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f5f7;
+    --bg-soft: #ffffff;
+    --bg-raise: #eceef2;
+    --line: #dcdfe5;
+    --fg: #1b1e24;
+    --fg-dim: #676e7a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Microsoft YaHei", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ---------- 顶栏 ---------- */
+
+.bar {
+  flex: 0 0 auto;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.bar .title { font-weight: 600; }
+.bar .spacer { flex: 1; }
+.bar .total { font-size: 13px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+
+.dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--err); flex: 0 0 auto;
+}
+.dot.on { background: var(--ok); }
+
+.icon-btn {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raise);
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+/* ---------- 布局 ---------- */
+
+main {
+  flex: 1 1 auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.panel {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.panel-head strong { font-size: 15px; }
+.panel-head .btn { margin-left: auto; }
+
+/* ---------- 上传区 ---------- */
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 26px 14px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+.drop:active, .drop.hover {
+  border-color: var(--accent);
+  background: rgba(76, 141, 255, 0.08);
+}
+.drop-icon { font-size: 26px; color: var(--accent); }
+.drop-text { font-size: 15px; }
+.drop-sub { font-size: 12px; color: var(--fg-dim); }
+
+/* ---------- 待传队列 ---------- */
+
+.queue {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg-raise);
+}
+
+.item-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-size { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.item-status { font-size: 12px; flex: 0 0 auto; }
+.item-status.ok { color: var(--ok); }
+.item-status.err { color: var(--err); }
+.item-status.doing { color: var(--accent); }
+
+/* 进度条 */
+.progress {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.progress > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+.item.done .progress > i { background: var(--ok); }
+.item.failed .progress > i { background: var(--err); }
+
+/* ---------- 按钮 ---------- */
+
+.row { display: flex; gap: 8px; margin-top: 12px; }
+
+.btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raise);
+  color: var(--fg);
+  font-size: 15px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.06s, background 0.15s;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; }
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  flex: 1;
+}
+.btn.small { min-height: 32px; padding: 0 12px; font-size: 13px; }
+.btn.danger { color: var(--err); border-color: var(--err); }
+
+/* ---------- 文件列表 ---------- */
+
+.list { display: flex; flex-direction: column; gap: 8px; }
+
+.empty {
+  text-align: center;
+  color: var(--fg-dim);
+  font-size: 13px;
+  padding: 24px 0;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raise);
+}
+
+.file-main { flex: 1; min-width: 0; }
+.file-name {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-meta {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.file .btn {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+/* ---------- 提示 ---------- */
+
+.hint-box {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--warn);
+  background: rgba(255, 176, 32, 0.1);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.hint-box.err { border-color: var(--err); background: rgba(255, 92, 92, 0.1); color: var(--err); }

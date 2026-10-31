@@ -895,7 +895,8 @@
   /* ---------- 面板切换 ---------- */
 
   const panels = {
-    keyboard: $('panel-keyboard'),
+    type: $('panel-type'),
+    files: $('panel-files'),
     media: $('panel-media'),
     keys: $('panel-keys'),
     gyro: $('panel-gyro'),
@@ -904,19 +905,32 @@
 
   let openPanel = null;
 
+  const filePanel = new window.FilePanel({ $: $, buzz: buzz });
+
   function togglePanel(name) {
+    // 原本点同一个 tab 会收起面板（toggle 语义）。
+    // 但手机上手指点按容易触发两次事件（pointerdown 后又 click），
+    // 面板会开了立刻关，看起来像"点了没反应"。
+    // 改成幂等：点同一个 tab 保持打开，收起统一用面板里的关闭按钮。
     Object.keys(panels).forEach(function (key) {
-      panels[key].hidden = key !== name || openPanel === name;
+      panels[key].hidden = key !== name;
     });
     document.querySelectorAll('.tab').forEach(function (tab) {
-      tab.classList.toggle('active', tab.dataset.panel === name && openPanel !== name);
+      tab.classList.toggle('active', tab.dataset.panel === name);
     });
-    openPanel = openPanel === name ? null : name;
+    openPanel = name;
 
-    if (openPanel === 'keyboard') {
-      setTimeout(function () { $('compose-input').focus(); }, 60);
+    if (name === 'files') {
+      filePanel.onShow();
     }
-    if (openPanel === 'gyro') {
+    if (name === 'type') {
+      // 稍等一拍再聚焦，否则面板还在过渡时聚焦会被浏览器丢掉
+      setTimeout(function () {
+        const input = $('type-input');
+        if (input && openPanel === 'type') input.focus();
+      }, 60);
+    }
+    if (name === 'gyro') {
       refreshGyroDiag();
     }
   }
@@ -935,27 +949,7 @@
     });
   });
 
-  /* ---------- 键盘面板 ---------- */
-
-  function sendText() {
-    const input = $('compose-input');
-    const text = input.value;
-    if (!text) return;
-    if (send({ t: 'tx', s: text })) {
-      input.value = '';
-      buzz(12);
-    } else {
-      alert('还没连上电脑，先等一下或刷新页面。');
-    }
-  }
-
-  $('btn-send').addEventListener('click', sendText);
-  $('compose-input').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      sendText();
-    }
-  });
+  /* ---------- 特殊键（原键盘面板，现并入快捷键面板） ---------- */
 
   const SPECIAL_KEYS = ['up', 'down', 'left', 'right', 'home', 'end',
     'pageup', 'pagedown', 'delete', 'f5', 'f11', 'printscreen'];
@@ -1029,6 +1023,82 @@
       b.classList.remove('locked');
     });
   }
+
+  /* ---------- 打字面板 ---------- */
+
+  /* 回车发送。两个必须处理好的细节：
+   *
+   * 1. 输入法组合中不能发送。
+   *    中文输入法选词时按回车是"确认候选词"，不是"提交"。
+   *    如果不判断 isComposing，用户打"你好"按回车确认候选，
+   *    会直接把半截内容发到电脑上，非常烦。
+   *    除了 isComposing，keyCode 229 是部分安卓输入法的兼容标记。
+   *
+   * 2. 换行要单独给按钮。
+   *    回车被占用后，想发多行只能靠"换行"按钮插入 \n。
+   */
+
+  function typeSubmit() {
+    const input = $('type-input');
+    const text = input.value;
+    if (!text.trim()) {
+      showTypeHint('没有内容可发送', true);
+      return;
+    }
+    if (send({ t: 'tx', s: text })) {
+      input.value = '';
+      showTypeHint('已发送 ' + text.length + ' 个字符', false);
+      buzz(14);
+    } else {
+      showTypeHint('还没连上电脑，等连接恢复后再发', true);
+    }
+  }
+
+  function showTypeHint(msg, isErr) {
+    const el = $('type-hint');
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    el.classList.toggle('err', !!isErr);
+    if (el._timer) clearTimeout(el._timer);
+    // 成功的提示自动消失，失败的留着让人看见
+    if (!isErr) {
+      el._timer = setTimeout(function () { el.hidden = true; }, 1800);
+    }
+  }
+
+  (function bindTypePanel() {
+    const input = $('type-input');
+    if (!input) return;
+
+    input.addEventListener('keydown', function (e) {
+      // isComposing: 输入法正在组合中
+      // keyCode 229: 部分安卓输入法在组合期统一报这个键码
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        typeSubmit();
+      }
+    });
+
+    $('type-send').addEventListener('click', typeSubmit);
+
+    $('type-newline').addEventListener('click', function () {
+      // 在光标处插入换行，而不是简单追加到末尾
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      const v = input.value;
+      input.value = v.slice(0, start) + '\n' + v.slice(end);
+      input.selectionStart = input.selectionEnd = start + 1;
+      input.focus();
+    });
+
+    $('type-clear').addEventListener('click', function () {
+      input.value = '';
+      input.focus();
+      $('type-hint').hidden = true;
+    });
+  })();
 
   /* ---------- 设置面板 ---------- */
 

@@ -322,15 +322,42 @@ class Win32Backend:
             self._send(*events)
 
     def type_text(self, text: str) -> None:
-        """逐 UTF-16 码元发送，代理对（emoji）也能正确落地。"""
-        units = text.encode("utf-16-le")
+        """逐 UTF-16 码元发送，代理对（emoji）也能正确落地。
+
+        换行要特殊处理：把 \\n 当作 Unicode 字符注入，
+        绝大多数编辑器会直接忽略（它是一个不可见的控制字符），
+        看起来就是"多行内容粘成一行"。
+        所以遇到换行时改发真正的回车键（VK_RETURN）。
+        """
+        VK_RETURN = 0x0D
         events: list[INPUT] = []
-        for i in range(0, len(units), 2):
-            unit = int.from_bytes(units[i : i + 2], "little")
-            events.append(self._key_input(0, unit, KEYEVENTF_UNICODE))
-            events.append(self._key_input(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP))
-        if events:
-            self._send(*events)
+
+        def flush() -> None:
+            if events:
+                self._send(*events)
+                events.clear()
+
+        for ch in text:
+            if ch == "\r":
+                continue                      # CRLF 只按一次，避免双回车
+            if ch == "\n":
+                # 先把前面攒的字符打出去，保证顺序
+                flush()
+                self._send(
+                    self._key_input(VK_RETURN, 0, 0),
+                    self._key_input(VK_RETURN, 0, KEYEVENTF_KEYUP),
+                )
+                continue
+
+            units = ch.encode("utf-16-le")
+            for i in range(0, len(units), 2):
+                unit = int.from_bytes(units[i : i + 2], "little")
+                events.append(self._key_input(0, unit, KEYEVENTF_UNICODE))
+                events.append(
+                    self._key_input(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP)
+                )
+
+        flush()
 
     def media(self, action: str) -> None:
         try:

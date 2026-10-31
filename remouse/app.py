@@ -1,4 +1,4 @@
-"""FastAPI 装配：静态页 + WebSocket 通道。"""
+"""FastAPI 装配：静态页 + WebSocket 通道 + 文件柜。"""
 
 from __future__ import annotations
 
@@ -7,18 +7,34 @@ import json
 import socket
 from pathlib import Path
 
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__, auth, netinfo, protocol
 from .config import Settings
+from .files import FileError, format_size
 from .hub import Hub, SessionInfo
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 WS_BAD_TOKEN = 4401
 WS_SUPERSEDED = 4409
+
+# 上传分块大小。64KB 是常见折中：太小 syscall 多，太大占内存。
+UPLOAD_CHUNK = 64 * 1024
+
+
+def _check_token(settings: Settings, k: str) -> None:
+    """文件和 WebSocket 用同一套令牌。校验失败直接 403。"""
+    if not auth.token_matches(settings.token, k):
+        raise HTTPException(status_code=403, detail="令牌无效")
 
 
 def create_app(settings: Settings, hub: Hub) -> FastAPI:
@@ -172,7 +188,127 @@ def create_app(settings: Settings, hub: Hub) -> FastAPI:
     if WEB_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
+    # ---------- 文件柜 ----------
+    #
+    # 为什么复用同一个端口和令牌：
+    # 手机已经扫过码、装过证书，文件页就是复用这条通道，
+    # 不用再开一个服务、再扫一次码。
+    _register_files(app, settings)
+
     return app
+
+
+def _register_files(app: FastAPI, settings: Settings) -> None:
+    @app.get("/files")
+    async def file_page() -> HTMLResponse:
+        return HTMLResponse((WEB_DIR / "files.html").read_text(encoding="utf-8"))
+
+    @app.get("/api/files")
+    async def api_list(k: str = Query(default="")) -> JSONResponse:
+        _check_token(settings, k)
+        store = settings.file_store()
+        entries = store.list()
+        return JSONResponse(
+            {
+                "ok": True,
+                "dir": str(store.root),
+                "files": [e.to_dict() for e in entries],
+                "total": store.total_bytes(),
+                "totalText": format_size(store.total_bytes()),
+                "maxBytes": store.max_bytes,
+            }
+        )
+
+    @app.post("/api/files")
+    async def api_upload(request: Request, name: str = Query(...), k: str = Query(default="")) -> JSONResponse:
+        _check_token(settings, k)
+        store = settings.file_store()
+
+        # 先看声明长度，能在写盘前就拒绝超大文件。
+        #
+        # 但直接 return 会让客户端"还在发数据、服务端已经关连接"，
+        # TCP 层表现为 ConnectionReset，浏览器报"网络错误"而不是
+        # 我们精心写的"超过上限"。所以超限时要把剩余请求体读完再回，
+        # 让连接正常收尾。丢弃而不是落盘，所以不占磁盘。
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > store.max_bytes:
+            drained = 0
+            async for chunk in request.stream():
+                drained += len(chunk)
+                if drained > store.max_bytes * 4:
+                    # 对方声称一个小值却猛发，不值得陪它耗。
+                    # 这时候断开是合理的，反正不是正常客户端。
+                    break
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": f"文件超过上限（{format_size(store.max_bytes)}）",
+                },
+                status_code=413,
+            )
+
+        try:
+            tmp, final, final_name = store.open_for_write(name)
+        except FileError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+        written = 0
+        exceeded = False
+        try:
+            with open(tmp, "wb") as fh:
+                async for chunk in request.stream():
+                    if not chunk:
+                        continue
+                    written += len(chunk)
+                    # Content-Length 可能是假的或被省略，边写边验。
+                    # 超了就停止写盘，但仍要把剩余数据读掉再回响应，
+                    # 否则客户端发到一半被 RST，看到的是"网络错误"。
+                    if written > store.max_bytes:
+                        exceeded = True
+                        continue
+                    fh.write(chunk)
+            if exceeded:
+                raise FileError(f"文件超过上限（{format_size(store.max_bytes)}）")
+            if written == 0:
+                raise FileError("文件为空")
+            store.commit(tmp, final)
+        except FileError as exc:
+            store.abort(tmp)
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=413)
+        except Exception as exc:  # 断连、磁盘满
+            store.abort(tmp)
+            return JSONResponse(
+                {"ok": False, "error": f"上传失败：{exc}"}, status_code=500
+            )
+
+        return JSONResponse(
+            {"ok": True, "name": final_name, "size": written, "sizeText": format_size(written)}
+        )
+
+    @app.get("/api/files/{name:path}")
+    async def api_download(name: str, k: str = Query(default="")) -> Response:
+        _check_token(settings, k)
+        store = settings.file_store()
+        try:
+            target = store.resolve(name)
+        except FileError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=404)
+        return FileResponse(
+            target,
+            filename=target.name,
+            media_type="application/octet-stream",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.delete("/api/files/{name:path}")
+    async def api_delete(name: str, k: str = Query(default="")) -> JSONResponse:
+        _check_token(settings, k)
+        store = settings.file_store()
+        try:
+            store.delete(name)
+        except FileError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=404)
+        return JSONResponse({"ok": True, "name": name})
 
 
 def print_banner(settings: Settings, backend_name: str) -> None:
@@ -192,6 +328,12 @@ def print_banner(settings: Settings, backend_name: str) -> None:
     print()
     print("  手机扫码或在浏览器输入：")
     print(f"    {url}")
+    print()
+    files_url = f"{scheme}://{primary}:{settings.port}/files?k={settings.token}"
+    print("  传文件（与触摸板同一令牌）：")
+    print(f"    {files_url}")
+    store = settings.file_store()
+    print(f"    落地目录 {store.root}　单文件上限 {format_size(store.max_bytes)}")
     print()
     if len(addrs) > 1:
         print("  其它可用地址（主地址连不上时试试）：")

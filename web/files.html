@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111318">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<title>文件柜 · reMouse</title>
+<link rel="stylesheet" href="/static/files.css">
+</head>
+<body>
+
+<header class="bar">
+  <span class="dot" id="dot"></span>
+  <span class="title">文件柜</span>
+  <span class="spacer"></span>
+  <span class="total" id="total">—</span>
+  <a class="icon-btn" href="/?k=" id="back-link" title="回到触摸板">◀</a>
+</header>
+
+<main>
+  <!-- 上传区 -->
+  <section class="panel">
+    <label class="drop" id="drop">
+      <input type="file" id="picker" multiple hidden>
+      <div class="drop-icon">⇧</div>
+      <div class="drop-text">点这里选文件</div>
+      <div class="drop-sub" id="limit-hint">单个文件最大 —</div>
+    </label>
+
+    <div class="queue" id="queue" hidden></div>
+
+    <div class="row" id="action-row" hidden>
+      <button class="btn primary" id="btn-upload">开始上传</button>
+      <button class="btn" id="btn-clear">清空</button>
+    </div>
+  </section>
+
+  <!-- 列表 -->
+  <section class="panel">
+    <div class="panel-head">
+      <strong>电脑上的文件</strong>
+      <button class="btn small" id="btn-refresh">刷新</button>
+    </div>
+    <div class="list" id="list">
+      <div class="empty">加载中…</div>
+    </div>
+  </section>
+
+  <div class="hint-box" id="hint" hidden></div>
+</main>
+
+<script src="/static/files.js"></script>
+</body>
+</html>

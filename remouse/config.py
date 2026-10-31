@@ -52,9 +52,19 @@ class Settings:
     move_interval_ms: int = 8
     heartbeat_timeout_s: float = 20.0
 
+    # 文件柜：手机上传落盘的目录与单文件上限
+    files_dir: Path | None = None
+    max_file_mb: int = 512
+
     @property
     def record_file(self) -> Path:
         return self.state_dir / "messages.jsonl"
+
+    def file_store(self):
+        from .files import FileStore
+
+        root = self.files_dir or (self.state_dir / "files")
+        return FileStore(root, self.max_file_mb * 1024 * 1024)
 
     def ensure_state_dir(self) -> None:
         self.state_dir.mkdir(parents=True, exist_ok=True)

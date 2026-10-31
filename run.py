@@ -46,6 +46,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--gyro", action="store_true", help="启动时默认开体感模式（需 HTTPS）"
     )
+    parser.add_argument(
+        "--files-dir",
+        default=None,
+        help="手机上传文件的落地目录（默认 .state/files；也可指向桌面某个文件夹）",
+    )
+    parser.add_argument(
+        "--max-file-mb",
+        type=int,
+        default=512,
+        help="单个文件大小上限，单位 MB（默认 512）",
+    )
     parser.add_argument("--version", action="version", version=f"reMouse {__version__}")
     return parser
 
@@ -119,7 +130,12 @@ def main(argv: list[str] | None = None) -> int:
         allow_public=args.allow_public,
         use_https=args.https and not args.bind_localhost,
         enable_gyro=args.gyro,
+        max_file_mb=max(1, args.max_file_mb),
     )
+    if args.files_dir:
+        from pathlib import Path as _Path
+
+        settings.files_dir = _Path(args.files_dir).expanduser().resolve()
     settings.ensure_state_dir()
     settings.token = auth.load_or_create_token(
         settings.state_dir / "token", rotate=args.new_token

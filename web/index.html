@@ -46,30 +46,44 @@
   <button class="key" data-btn="m" aria-label="中键">中键</button>
   <button class="key" data-btn="r" aria-label="右键">右键</button>
   <span class="spacer"></span>
-  <button class="tab" data-panel="keyboard" aria-label="键盘">⌨</button>
-  <button class="tab" data-panel="media" aria-label="媒体">♪</button>
+  <button class="tab" data-panel="type" aria-label="打字">⌨</button>
+  <button class="tab" data-panel="files" aria-label="传文件">⇅</button>
   <button class="tab" data-panel="keys" aria-label="快捷键">⌘</button>
+  <button class="tab" data-panel="media" aria-label="媒体">♪</button>
   <button class="tab" data-panel="gyro" aria-label="体感">◉</button>
 </footer>
 
-<!-- 键盘面板 -->
-<section class="panel" id="panel-keyboard" hidden>
+<!-- 文件传输面板 -->
+<section class="panel" id="panel-files" hidden>
   <div class="panel-head">
-    <strong>键盘输入</strong>
-    <span class="tip">整句发送，中文可用</span>
+    <strong>传文件</strong>
+    <span class="tip">手机 ↔ 电脑，同一 WiFi 直达</span>
     <button class="close" data-close>✕</button>
   </div>
-  <div class="compose">
-    <textarea id="compose-input" rows="2" placeholder="在这里打字，然后点发送" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
-    <button class="send" id="btn-send">发送</button>
+
+  <label class="drop" id="fp-drop">
+    <input type="file" id="fp-picker" multiple hidden>
+    <div class="drop-icon">⇧</div>
+    <div class="drop-text">选文件传到电脑</div>
+    <div class="drop-sub" id="fp-limit">单个文件最大 —</div>
+  </label>
+
+  <div class="fp-queue" id="fp-queue" hidden></div>
+
+  <div class="row" id="fp-actions" hidden>
+    <button class="key wide primary" id="fp-upload">开始上传</button>
+    <button class="key wide" id="fp-clear">清空</button>
   </div>
-  <div class="grid" id="grid-special"></div>
-  <div class="row">
-    <button class="key wide" data-key="backspace">⌫</button>
-    <button class="key wide" data-key="enter">Enter</button>
-    <button class="key wide" data-key="esc">Esc</button>
-    <button class="key wide" data-key="tab">Tab</button>
+
+  <div class="fp-head">
+    <span>电脑上的文件</span>
+    <button class="fp-refresh" id="fp-refresh">刷新</button>
   </div>
+  <div class="fp-list" id="fp-list">
+    <div class="fp-empty">加载中…</div>
+  </div>
+
+  <div class="hint-box" id="fp-hint" hidden></div>
 </section>
 
 <!-- 媒体面板 -->
@@ -90,20 +104,63 @@
   </div>
 </section>
 
-<!-- 快捷键面板 -->
+<!-- 快捷键面板：按钮按类型折叠，避免一屏堆几十个键 -->
 <section class="panel" id="panel-keys" hidden>
   <div class="panel-head">
     <strong>快捷键</strong>
     <span class="tip">先点修饰键可锁定</span>
     <button class="close" data-close>✕</button>
   </div>
+
   <div class="mods" id="mods">
     <button class="key mod" data-mod="ctrl">Ctrl</button>
     <button class="key mod" data-mod="shift">Shift</button>
     <button class="key mod" data-mod="alt">Alt</button>
     <button class="key mod" data-mod="win">Win</button>
   </div>
-  <div class="grid" id="grid-combo"></div>
+
+  <!-- 分组折叠。用原生 details，不依赖 JS，手机浏览器都支持。 -->
+  <details class="fold" open>
+    <summary>字母组合<span class="fold-note">26 键</span></summary>
+    <div class="grid" id="grid-combo"></div>
+  </details>
+
+  <details class="fold">
+    <summary>方向与功能键<span class="fold-note">12 键</span></summary>
+    <div class="grid" id="grid-special"></div>
+  </details>
+
+  <details class="fold">
+    <summary>编辑键<span class="fold-note">4 键</span></summary>
+    <div class="row">
+      <button class="key wide" data-key="backspace">⌫</button>
+      <button class="key wide" data-key="enter">Enter</button>
+      <button class="key wide" data-key="esc">Esc</button>
+      <button class="key wide" data-key="tab">Tab</button>
+    </div>
+  </details>
+</section>
+
+<!-- 打字面板：在手机上打完一整句，回车发到电脑 -->
+<section class="panel" id="panel-type" hidden>
+  <div class="panel-head">
+    <strong>打字</strong>
+    <span class="tip">回车即发送</span>
+    <button class="close" data-close>✕</button>
+  </div>
+
+  <textarea id="type-input" rows="5"
+    placeholder="在这里打字，按回车发送到电脑"
+    autocomplete="off" autocorrect="off" autocapitalize="off"
+    spellcheck="false" enterkeyhint="send"></textarea>
+
+  <div class="row">
+    <button class="key wide primary" id="type-send">发送</button>
+    <button class="key wide" id="type-newline">换行</button>
+    <button class="key wide" id="type-clear">清空</button>
+  </div>
+
+  <div class="hint-box" id="type-hint" hidden></div>
 </section>
 
 <!-- 体感面板 -->
@@ -224,6 +281,7 @@
 <script src="/static/gyro.js"></script>
 <script src="/static/scrollbar.js"></script>
 <script src="/static/hint.js"></script>
+<script src="/static/filepanel.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
